@@ -101,8 +101,8 @@ def parse_smartcopilot_line(line, current_section):
 			success = False;
 	
 		if success == True and current_section != "info":
-			line_split_on_spaces = line.split(" ");
-			dataref = line_split_on_spaces[0];
+			line_split_on_equal_sign = line.split("=");
+			dataref = line_split_on_equal_sign[0];
 
 			position_of_fixed_index = dataref.find("_FIXED_INDEX_");
 			position_of_left_brace = dataref.find("[");
@@ -114,11 +114,14 @@ def parse_smartcopilot_line(line, current_section):
 			elif position_of_left_brace > 0 and position_of_right_brace > position_of_left_brace:
 				array_index = int(dataref[position_of_left_brace+1:position_of_right_brace]);
 				dataref = dataref[0:position_of_left_brace];
-				
-			right_side_value = line_split_on_spaces[2];
-
-			if len(line_split_on_spaces) != 3:
-				success = False;
+			
+			if len(line_split_on_equal_sign) > 2 :
+				print("WARNING: Found extra arguments one line: {}".format(line));
+			if len(line_split_on_equal_sign) == 2:
+				right_side_value = line_split_on_equal_sign[1];
+			else:
+				print("WARNING: Found NO right side value, assuming = 0, for line: {}".format(line))
+				right_side_value = 0;
 
 			if current_section == "override":
 				
@@ -147,11 +150,21 @@ def parse_smartcopilot_line(line, current_section):
 
 				right_side_value = 0;
 
-			elif float(right_side_value) != 0:
-				if float(right_side_value).is_integer() == True:
-					holdvalues.append(int(float(right_side_value)));
-				else:
-					holdvalues.append(float(right_side_value));
+			elif current_section == "transponder":
+				if int(right_side_value) == 1:
+					print("Transponder line will be treated as a command due to rhs value of 1: {}".format(line));
+					line_type = "Command";
+
+			elif current_section == "continued":
+				if int(right_side_value) == 1:
+					print("FORCE modifier will be applied for CONTINUED line: {}".format(line))
+					sync_modifiers.append("FORCE");
+			elif current_section == "triggers":
+				if float(right_side_value) != 0:
+					if float(right_side_value).is_integer() == True:
+						holdvalues.append(int(float(right_side_value)));
+					else:
+						holdvalues.append(float(right_side_value));
 
 	array_index_array = []
 
