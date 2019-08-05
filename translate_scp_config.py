@@ -215,7 +215,7 @@ def main(argv):
 
 				parsed_line_infos.append(parsed_line);
 
-				print("{} {} @ {} : {}".format(parsed_line["type"], parsed_line["dataref"], ",".join(parsed_line["sync_modifiers"]), parsed_line["scp_line"]));
+				#print("{} {} @ {} : {}".format(parsed_line["type"], parsed_line["dataref"], ",".join(parsed_line["sync_modifiers"]), parsed_line["scp_line"]));
 				
 
 				cnt += 1;
@@ -236,10 +236,10 @@ def main(argv):
 			continue;
 
 		if dataref in datarefs_that_appear:
-			print("Alread have seen this dataref {}".format(dataref));
-			print(datarefs_that_appear[dataref]);
-			print("New parsed_line was:");
-			print(parsed_line);
+			#print("Alread have seen this dataref {}".format(dataref));
+			#print(datarefs_that_appear[dataref]);
+			#print("New parsed_line was:");
+			#print(parsed_line);
 			
 			its_ok = False;
 
@@ -262,22 +262,24 @@ def main(argv):
 									its_ok = False;
 
 						if its_ok == True:
-							print("THIS SHOULD BE OK SINCE JUST ARRAY INDEX DIFFERS");
-							print("ADDING ADDITIONAL ARRAY INDEX. NEW LINE IS:")
 							datarefs_that_appear[dataref][idx]["array_index"].extend(parsed_line["array_index"]);
 							parsed_line["skip"] = datarefs_that_appear[dataref][idx];
 							# NOTE: Python objects are passed by reference, so this will modify the original
 							# parsed_line in our parsed_line_infos.
 							# WE WILL MARK THE LATEST LINE TO SKIP.
-							print("REVISED PARSED LINE IS:");
-							print(datarefs_that_appear[dataref][idx]);
+							#print("REVISED PARSED LINE IS:");
+							#print(datarefs_that_appear[dataref][idx]);
 					else:
 						print("WE NEED TO DECIDE IF THIS SHOULD BE OK??? Sync type doesn't match a previous parsed line");
+						print("Lines already containing this dataref {}:".format(dataref));
+						print(datarefs_that_appear[dataref]);
+						print("New parsed_line was:");
+						print(parsed_line);
 						its_ok = False;
 
 
 			if its_ok == False:
-				print("THIS IS NOT OK!");
+				print("FOR NOW THIS IS NOT OK! DIE!");
 				exit();
 					
 
@@ -314,30 +316,30 @@ def main(argv):
 			dataref_string = parsed_line['dataref'];
 
 			if len(parsed_line["holdvalues"]) > 0:
-				print("Found a trigger line with hold values!");
-				print(parsed_line);
+				#print("Found a trigger line with hold values!");
+				#print(parsed_line);
 				hold_values_joined = "[" + ",".join(map(str, parsed_line["holdvalues"])) + "]";
 				parsed_line['sync_modifiers'].append("HOLDVALUES");
 				sync_modifiers_joined = ",".join(parsed_line['sync_modifiers']);
 				
 				hold_and_sync_modifiers_joined = hold_values_joined + " " + sync_modifiers_joined;
-				print(hold_and_sync_modifiers_joined);
+				#print(hold_and_sync_modifiers_joined);
 			else:
 				sync_modifiers_joined = ",".join(parsed_line['sync_modifiers']);
 				hold_and_sync_modifiers_joined = sync_modifiers_joined;
 
 			if len(parsed_line["array_index"]) > 0:
-				print("Found a trigger array");
+				#print("Found a trigger array");
 				indices_contiguous = dataref_indices_are_contiguous(parsed_line["array_index"]);
 				if indices_contiguous == True:
-					print("Found the indices are contiguous.");
+					#print("Found the indices are contiguous.");
 					start_index = min(parsed_line["array_index"]);
 					stop_index = max(parsed_line["array_index"]);
 					if start_index ==  stop_index:
 						config_file_line = "Trigger " + parsed_line["dataref"] + "[" + str(start_index) + "] @ 0 " + hold_and_sync_modifiers_joined;
 					else:
 						config_file_line = "Trigger " + parsed_line["dataref"] + "[" + str(start_index) + ":" + str(stop_index) + "] @ 0 " + hold_and_sync_modifiers_joined;
-					print(config_file_line);
+					#print(config_file_line);
 				else:
 					print("WARNING: Found indices of trigger dataref {} are not contiguous. Will produce individual lines.");
 					config_file_lines.append("# WARNING: The indices for this dataref were not contiguous?");
@@ -349,8 +351,8 @@ def main(argv):
 
 
 			else:
-				print("Found trigger parsed_line:")
-				print(parsed_line);
+				#print("Found trigger parsed_line:")
+				#print(parsed_line);
 				config_file_line = "Trigger " + parsed_line["dataref"] + " @ 0 " + hold_and_sync_modifiers_joined;
 
 		elif parsed_line["type"] == "Command":
