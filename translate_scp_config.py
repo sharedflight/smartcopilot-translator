@@ -1,3 +1,9 @@
+#!/usr/bin/python
+
+import sys, getopt
+
+
+
 smartcopilot_cfg_filepath = 'smartcopilot.cfg'
 
 # Python implementation to check whether the array 
@@ -160,216 +166,244 @@ def parse_smartcopilot_line(line, current_section):
 	return parsed_line, current_section, success
 
 
+def main(argv):
+	inputfile = 'smartcopilot.cfg'
+	outputfile = 'Shared Flight Config File.txt'
+	try:
+		opts, args = getopt.getopt(argv,"hi:o:",["ifile=","ofile="])
+	except getopt.GetoptError:
+		print 'translate_scp_config.py -i <inputfile> -o <outputfile>'
+		sys.exit(2)
+	for opt, arg in opts:
+		if opt == '-h':
+			print 'translate_scp_config.py -i <inputfile> -o <outputfile>'
+			sys.exit()
+		elif opt in ("-i", "--ifile"):
+			inputfile = arg
+		elif opt in ("-o", "--ofile"):
+			outputfile = arg
 
-current_section = '';
+	print("Input file is " + inputfile)
+	print("Output file is " + outputfile)
 
-parsed_line_infos = [];
+	current_section = '';
 
-with open(smartcopilot_cfg_filepath) as fp:
-	line = fp.readline();
-	cnt = 1;
-	while line:
-		line = line.strip()
+	parsed_line_infos = [];
 
-		if len(line) == 0:
-			cnt += 1;
+	try:
+		with open(inputfile) as fp:
 			line = fp.readline();
-			continue
+			cnt = 1;
+			while line:
+				line = line.strip()
 
-		parsed_line, current_section, success = parse_smartcopilot_line(line, current_section);
+				if len(line) == 0:
+					cnt += 1;
+					line = fp.readline();
+					continue
 
-		if (success == False):
-			print("We died on this line in secion {}:".format(current_section));
-			print(line);
-			exit();
+				parsed_line, current_section, success = parse_smartcopilot_line(line, current_section);
 
-		parsed_line["scp_line_number"] = cnt;
+				if (success == False):
+					print("We died on this line in secion {}:".format(current_section));
+					print(line);
+					exit();
 
-		parsed_line["sf_line_number"] = len(parsed_line_infos) + 1;
+				parsed_line["scp_line_number"] = cnt;
 
-		parsed_line_infos.append(parsed_line);
+				parsed_line["sf_line_number"] = len(parsed_line_infos) + 1;
 
-		print("{} {} @ {} : {}".format(parsed_line["type"], parsed_line["dataref"], ",".join(parsed_line["sync_modifiers"]), parsed_line["scp_line"]));
-		
+				parsed_line_infos.append(parsed_line);
 
-		cnt += 1;
-		line = fp.readline();
-
-config_file_lines = [];
-
-datarefs_that_appear = {};
-# Lets loop over and look for 
-# datarefs that appear more than once...
-for parsed_line in parsed_line_infos:
-	dataref = parsed_line["dataref"];
-	
-	if dataref == "????":
-		continue;
-
-	if dataref in datarefs_that_appear:
-		print("Alread have seen this dataref {}".format(dataref));
-		print(datarefs_that_appear[dataref]);
-		print("New parsed_line was:");
-		print(parsed_line);
-		
-		its_ok = False;
-
-		for previous_parsed_line in datarefs_that_appear[dataref]:
-			if previous_parsed_line["scp_line"] == parsed_line["scp_line"]:
-				print("WARNING: EXACT DUPLICATE OF SCP LINE {} FOUND AGAIN ON SCP LINE {}".format(previous_parsed_line["scp_line_number"], parsed_line["scp_line_number"]));
-				parsed_line["skip"] = previous_parsed_line;
-				its_ok = True;
-
-		# Set its_ok to true and then if find difference
-		# will set to false again...
-		if its_ok == False:
-			its_ok = True;
-			
-			for idx, previous_parsed_line in enumerate(datarefs_that_appear[dataref]):
-				if previous_parsed_line['type'] ==  parsed_line['type']:
-					for key in previous_parsed_line:
-						if key != "scp_line_number" and key != "scp_line" and key != "array_index" and key != "skip"  and key != "sf_line_number": 
-							if previous_parsed_line[key] != parsed_line[key]:
-								its_ok = False;
-
-					if its_ok == True:
-						print("THIS SHOULD BE OK SINCE JUST ARRAY INDEX DIFFERS");
-						print("ADDING ADDITIONAL ARRAY INDEX. NEW LINE IS:")
-						datarefs_that_appear[dataref][idx]["array_index"].extend(parsed_line["array_index"]);
-						parsed_line["skip"] = datarefs_that_appear[dataref][idx];
-						# NOTE: Python objects are passed by reference, so this will modify the original
-						# parsed_line in our parsed_line_infos.
-						# WE WILL MARK THE LATEST LINE TO SKIP.
-						print("REVISED PARSED LINE IS:");
-						print(datarefs_that_appear[dataref][idx]);
-				else:
-					print("WE NEED TO DECIDE IF THIS SHOULD BE OK??? Sync type doesn't match a previous parsed line");
-					its_ok = False;
-
-
-		if its_ok == False:
-			print("THIS IS NOT OK!");
-			exit();
+				print("{} {} @ {} : {}".format(parsed_line["type"], parsed_line["dataref"], ",".join(parsed_line["sync_modifiers"]), parsed_line["scp_line"]));
 				
 
+				cnt += 1;
+				line = fp.readline();
+	except EnvironmentError:
+		print('Input file ' + inputfile + ' does not exist')
+		exit();
 
-	else:
-		datarefs_that_appear[parsed_line["dataref"]] = [parsed_line];
+	config_file_lines = [];
 
-still_in_comment_header = True;
-
-for parsed_line in parsed_line_infos:
-
-	config_file_line = "";
-
-	parsed_line["sf_line_number"] = len(config_file_lines) + 1;
-
-	if "skip" in parsed_line:
-		config_file_line = "#SKIPPED (EITHER DUPLICATE OR MERGE WITH LINE " + str(parsed_line["skip"]["sf_line_number"]) + ") -- " + parsed_line["scp_line"];
-
-	elif parsed_line["type"] == "#":
-		if parsed_line["scp_line"].find("##") >= 0 and still_in_comment_header == False:
-			config_file_lines.append("");
-		config_file_line = parsed_line["scp_line"];
-		config_file_lines.append(config_file_line);
-		continue;
-	elif parsed_line["type"] == "#SECTION":
-		config_file_line = parsed_line["type"] + " " + parsed_line["scp_line"];
-		config_file_lines.append("");
-		config_file_lines.append(config_file_line);
-		config_file_lines.append("");
-		continue;
-	elif parsed_line["type"] == "Trigger":
+	datarefs_that_appear = {};
+	# Lets loop over and look for 
+	# datarefs that appear more than once...
+	for parsed_line in parsed_line_infos:
+		dataref = parsed_line["dataref"];
 		
-		hold_and_sync_modifiers_joined = '';
-		dataref_string = parsed_line['dataref'];
+		if dataref == "????":
+			continue;
 
-		if len(parsed_line["holdvalues"]) > 0:
-			print("Found a trigger line with hold values!");
+		if dataref in datarefs_that_appear:
+			print("Alread have seen this dataref {}".format(dataref));
+			print(datarefs_that_appear[dataref]);
+			print("New parsed_line was:");
 			print(parsed_line);
-			hold_values_joined = "[" + ",".join(map(str, parsed_line["holdvalues"])) + "]";
-			parsed_line['sync_modifiers'].append("HOLDVALUES");
-			sync_modifiers_joined = ",".join(parsed_line['sync_modifiers']);
 			
-			hold_and_sync_modifiers_joined = hold_values_joined + " " + sync_modifiers_joined;
-			print(hold_and_sync_modifiers_joined);
-		else:
-			sync_modifiers_joined = ",".join(parsed_line['sync_modifiers']);
-			hold_and_sync_modifiers_joined = sync_modifiers_joined;
+			its_ok = False;
 
-		if len(parsed_line["array_index"]) > 0:
-			print("Found a trigger array");
-			indices_contiguous = dataref_indices_are_contiguous(parsed_line["array_index"]);
-			if indices_contiguous == True:
-				print("Found the indices are contiguous.");
-				start_index = min(parsed_line["array_index"]);
-				stop_index = max(parsed_line["array_index"]);
-				if start_index ==  stop_index:
-					config_file_line = "Trigger " + parsed_line["dataref"] + "[" + str(start_index) + "] @ 0 " + hold_and_sync_modifiers_joined;
-				else:
-					config_file_line = "Trigger " + parsed_line["dataref"] + "[" + str(start_index) + ":" + str(stop_index) + "] @ 0 " + hold_and_sync_modifiers_joined;
-				print(config_file_line);
+			for previous_parsed_line in datarefs_that_appear[dataref]:
+				if previous_parsed_line["scp_line"] == parsed_line["scp_line"]:
+					print("WARNING: EXACT DUPLICATE OF SCP LINE {} FOUND AGAIN ON SCP LINE {}".format(previous_parsed_line["scp_line_number"], parsed_line["scp_line_number"]));
+					parsed_line["skip"] = previous_parsed_line;
+					its_ok = True;
+
+			# Set its_ok to true and then if find difference
+			# will set to false again...
+			if its_ok == False:
+				its_ok = True;
+				
+				for idx, previous_parsed_line in enumerate(datarefs_that_appear[dataref]):
+					if previous_parsed_line['type'] ==  parsed_line['type']:
+						for key in previous_parsed_line:
+							if key != "scp_line_number" and key != "scp_line" and key != "array_index" and key != "skip"  and key != "sf_line_number": 
+								if previous_parsed_line[key] != parsed_line[key]:
+									its_ok = False;
+
+						if its_ok == True:
+							print("THIS SHOULD BE OK SINCE JUST ARRAY INDEX DIFFERS");
+							print("ADDING ADDITIONAL ARRAY INDEX. NEW LINE IS:")
+							datarefs_that_appear[dataref][idx]["array_index"].extend(parsed_line["array_index"]);
+							parsed_line["skip"] = datarefs_that_appear[dataref][idx];
+							# NOTE: Python objects are passed by reference, so this will modify the original
+							# parsed_line in our parsed_line_infos.
+							# WE WILL MARK THE LATEST LINE TO SKIP.
+							print("REVISED PARSED LINE IS:");
+							print(datarefs_that_appear[dataref][idx]);
+					else:
+						print("WE NEED TO DECIDE IF THIS SHOULD BE OK??? Sync type doesn't match a previous parsed line");
+						its_ok = False;
+
+
+			if its_ok == False:
+				print("THIS IS NOT OK!");
+				exit();
+					
+
+
+		else:
+			datarefs_that_appear[parsed_line["dataref"]] = [parsed_line];
+
+	still_in_comment_header = True;
+
+	for parsed_line in parsed_line_infos:
+
+		config_file_line = "";
+
+		parsed_line["sf_line_number"] = len(config_file_lines) + 1;
+
+		if "skip" in parsed_line:
+			config_file_line = "#SKIPPED (EITHER DUPLICATE OR MERGE WITH LINE " + str(parsed_line["skip"]["sf_line_number"]) + ") -- " + parsed_line["scp_line"];
+
+		elif parsed_line["type"] == "#":
+			if parsed_line["scp_line"].find("##") >= 0 and still_in_comment_header == False:
+				config_file_lines.append("");
+			config_file_line = parsed_line["scp_line"];
+			config_file_lines.append(config_file_line);
+			continue;
+		elif parsed_line["type"] == "#SECTION":
+			config_file_line = parsed_line["type"] + " " + parsed_line["scp_line"];
+			config_file_lines.append("");
+			config_file_lines.append(config_file_line);
+			config_file_lines.append("");
+			continue;
+		elif parsed_line["type"] == "Trigger":
+			
+			hold_and_sync_modifiers_joined = '';
+			dataref_string = parsed_line['dataref'];
+
+			if len(parsed_line["holdvalues"]) > 0:
+				print("Found a trigger line with hold values!");
+				print(parsed_line);
+				hold_values_joined = "[" + ",".join(map(str, parsed_line["holdvalues"])) + "]";
+				parsed_line['sync_modifiers'].append("HOLDVALUES");
+				sync_modifiers_joined = ",".join(parsed_line['sync_modifiers']);
+				
+				hold_and_sync_modifiers_joined = hold_values_joined + " " + sync_modifiers_joined;
+				print(hold_and_sync_modifiers_joined);
 			else:
-				print("WARNING: Found indices of trigger dataref {} are not contiguous. Will produce individual lines.");
-				config_file_lines.append("# WARNING: The indices for this dataref were not contiguous?");
-				for a_index in parsed_line["array_index"]:
-					config_file_line = "Trigger " + parsed_line["dataref"] + "[" + str(a_index)+ "] @ 0 " + hold_and_sync_modifiers_joined;
+				sync_modifiers_joined = ",".join(parsed_line['sync_modifiers']);
+				hold_and_sync_modifiers_joined = sync_modifiers_joined;
+
+			if len(parsed_line["array_index"]) > 0:
+				print("Found a trigger array");
+				indices_contiguous = dataref_indices_are_contiguous(parsed_line["array_index"]);
+				if indices_contiguous == True:
+					print("Found the indices are contiguous.");
+					start_index = min(parsed_line["array_index"]);
+					stop_index = max(parsed_line["array_index"]);
+					if start_index ==  stop_index:
+						config_file_line = "Trigger " + parsed_line["dataref"] + "[" + str(start_index) + "] @ 0 " + hold_and_sync_modifiers_joined;
+					else:
+						config_file_line = "Trigger " + parsed_line["dataref"] + "[" + str(start_index) + ":" + str(stop_index) + "] @ 0 " + hold_and_sync_modifiers_joined;
+					print(config_file_line);
+				else:
+					print("WARNING: Found indices of trigger dataref {} are not contiguous. Will produce individual lines.");
+					config_file_lines.append("# WARNING: The indices for this dataref were not contiguous?");
+					for a_index in parsed_line["array_index"]:
+						config_file_line = "Trigger " + parsed_line["dataref"] + "[" + str(a_index)+ "] @ 0 " + hold_and_sync_modifiers_joined;
+						config_file_lines.append(config_file_line);
+					continue
+
+
+
+			else:
+				print("Found trigger parsed_line:")
+				print(parsed_line);
+				config_file_line = "Trigger " + parsed_line["dataref"] + " @ 0 " + hold_and_sync_modifiers_joined;
+
+		elif parsed_line["type"] == "Command":
+			config_file_line = "Command " + parsed_line["dataref"];
+
+		elif parsed_line["type"] == "Override":
+			
+			if len(parsed_line["array_index"]) > 0:
+				print("ERROR: DO NOT KNOW HOW TO HANDLE ARRAY DATAREF OVERIDES YET!?!?");
+				print("Original SCP line {}: {}".format(parsed_line["scp_line_number"] , parsed_line["scp_line"]))
+				print("Parsed line data:");
+				exit();
+
+			if len(parsed_line["override_modifiers"]) > 1:
+				print("WARNING: We are splitting override into multiple overrides ?!?!?");
+				print("Original SCP line {}: {}".format(parsed_line["scp_line_number"] , parsed_line["scp_line"]))
+				config_file_lines.append("# WARNING: We are splitting override into multiple overrides ?!?!?");
+				config_file_lines.append("Original SCP line {}: {}".format(parsed_line["scp_line_number"] , parsed_line["scp_line"]));
+				
+				print("Parsed line data:");
+				print(parsed_line);
+
+				for override_modifier in parsed_line["override_modifiers"]:
+					config_file_line = "Override " + parsed_line["dataref"] + " @ 1 " + override_modifier;
 					config_file_lines.append(config_file_line);
 				continue
 
+			else:
 
+				config_file_line = "Override " + parsed_line["dataref"] + " @ 1 " + parsed_line["override_modifiers"][0]
+
+		elif parsed_line["type"] == "#Setup":
+
+			config_file_line = "#[SETUP] Section Line: " + parsed_line["scp_line"];
+
+		elif parsed_line["type"] == "#Info":
+
+			config_file_line = "#[INFO] Section Line: " + parsed_line["scp_line"];
 
 		else:
-			print("Found trigger parsed_line:")
+			print("We died on this parsed_line:")
 			print(parsed_line);
-			config_file_line = "Trigger " + parsed_line["dataref"] + " @ 0 " + hold_and_sync_modifiers_joined;
-
-	elif parsed_line["type"] == "Command":
-		config_file_line = "Command " + parsed_line["dataref"];
-
-	elif parsed_line["type"] == "Override":
-		
-		if len(parsed_line["array_index"]) > 0:
-			print("ERROR: DO NOT KNOW HOW TO HANDLE ARRAY DATAREF OVERIDES YET!?!?");
-			print("Original SCP line {}: {}".format(parsed_line["scp_line_number"] , parsed_line["scp_line"]))
-			print("Parsed line data:");
 			exit();
 
-		if len(parsed_line["override_modifiers"]) > 1:
-			print("WARNING: We are splitting override into multiple overrides ?!?!?");
-			print("Original SCP line {}: {}".format(parsed_line["scp_line_number"] , parsed_line["scp_line"]))
-			config_file_lines.append("# WARNING: We are splitting override into multiple overrides ?!?!?");
-			config_file_lines.append("Original SCP line {}: {}".format(parsed_line["scp_line_number"] , parsed_line["scp_line"]));
-			
-			print("Parsed line data:");
-			print(parsed_line);
+		still_in_comment_header = False;
 
-			for override_modifier in parsed_line["override_modifiers"]:
-				config_file_line = "Override " + parsed_line["dataref"] + " @ 1 " + override_modifier;
-				config_file_lines.append(config_file_line);
-			continue
+		config_file_lines.append(config_file_line);
 
-		else:
+	with open(outputfile, 'w') as f:
+	    f.write('\n'.join(config_file_lines))
 
-			config_file_line = "Override " + parsed_line["dataref"] + " @ 1 " + parsed_line["override_modifiers"][0]
 
-	elif parsed_line["type"] == "#Setup":
 
-		config_file_line = "#[SETUP] Section Line: " + parsed_line["scp_line"];
-
-	elif parsed_line["type"] == "#Info":
-
-		config_file_line = "#[INFO] Section Line: " + parsed_line["scp_line"];
-
-	else:
-		print("We died on this parsed_line:")
-		print(parsed_line);
-		exit();
-
-	still_in_comment_header = False;
-
-	config_file_lines.append(config_file_line);
-
-with open("Shared Flight Config File.txt", 'w') as f:
-    f.write('\n'.join(config_file_lines))
+if __name__ == "__main__":
+   main(sys.argv[1:])
 		
