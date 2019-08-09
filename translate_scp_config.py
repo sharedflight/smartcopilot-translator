@@ -2,8 +2,6 @@
 
 import sys, getopt
 
-
-
 smartcopilot_cfg_filepath = 'smartcopilot.cfg'
 
 # Python implementation to check whether the array 
@@ -102,7 +100,7 @@ def parse_smartcopilot_line(line, current_section):
 	
 		if success == True and current_section != "info":
 			line_split_on_equal_sign = line.split("=");
-			dataref = line_split_on_equal_sign[0];
+			dataref = line_split_on_equal_sign[0].strip();
 
 			position_of_fixed_index = dataref.find("_FIXED_INDEX_");
 			position_of_left_brace = dataref.find("[");
@@ -179,18 +177,40 @@ def parse_smartcopilot_line(line, current_section):
 	return parsed_line, current_section, success
 
 
+def parse_connector_line(line):
+
+	success = True;
+
+	if line[0] == '#' or (line[0] == 'p' and line[1] == '#'):
+		line_type = "#";
+		success = False;
+
+	parsed_connector_line = line.split(";");
+
+	parsed_connector_line = map(str.strip, parsed_connector_line);
+
+	return parsed_connector_line, success
+
+
 def main(argv):
 	inputfile = 'smartcopilot.cfg'
 	outputfile = 'Shared Flight Config File.txt'
+	
+	should_translate_from_a320_config = False;
+	a320connectorfile = '';
+
 	try:
-		opts, args = getopt.getopt(argv,"hi:o:",["ifile=","ofile="])
+		opts, args = getopt.getopt(argv,"hi:o:a:",["ifile=","ofile="])
 	except getopt.GetoptError:
-		print 'translate_scp_config.py -i <inputfile> -o <outputfile>'
+		print 'translate_scp_config.py -i <inputfile> -o <outputfile> [-a <a320_connector_file>]'
 		sys.exit(2)
 	for opt, arg in opts:
 		if opt == '-h':
 			print 'translate_scp_config.py -i <inputfile> -o <outputfile>'
 			sys.exit()
+		elif opt == "-a":
+			should_translate_from_a320_config = True;
+			a320connectorfile = arg
 		elif opt in ("-i", "--ifile"):
 			inputfile = arg
 		elif opt in ("-o", "--ofile"):
@@ -238,6 +258,69 @@ def main(argv):
 		exit();
 
 	config_file_lines = [];
+
+	if should_translate_from_a320_config == True:
+		print("Reading through A320 connector config file: {}".format(a320connectorfile));
+		
+		parsed_connector_lines = [];
+
+		try:
+			with open(a320connectorfile) as fp:
+				line = fp.readline();
+				cnt = 1;
+				while line:
+					line = line.strip()
+
+					if len(line) == 0:
+						cnt += 1;
+						line = fp.readline();
+						continue
+
+					parsed_connector_line, success = parse_connector_line(line);
+
+					if (success == False):
+						cnt += 1;
+						line = fp.readline();
+						continue
+
+					#print(parsed_connector_line)
+
+					parsed_connector_lines.append(parsed_connector_line);
+					#print("{} {} @ {} : {}".format(parsed_line["type"], parsed_line["dataref"], ",".join(parsed_line["sync_modifiers"]), parsed_line["scp_line"]));
+					
+
+					cnt += 1;
+					line = fp.readline();
+
+				for parsed_line in parsed_line_infos:
+
+					#print(parsed_line)
+					dataref = parsed_line["dataref"];
+					
+					#Look for match...
+					for parsed_connector_line in parsed_connector_lines:
+						parsed_connector_line_dataref = parsed_connector_line[4];
+						#print("{} vs {}".format(dataref, parsed_connector_line_dataref))
+						if len(parsed_connector_line) > 4 and parsed_connector_line[4] == dataref:
+							sharedValueName = parsed_connector_line[2];
+							#print("Found match, and Shared Value of {} for dataref {}".format(parsed_connector_line[2], dataref));
+							#print(parsed_connector_line)
+							if (parsed_connector_line[0] == "DATAREF"):
+								parsed_line["dataref"] = "{FFA320}" + sharedValueName
+							else:
+								print("How do we handle this line type?")
+								print(parsed_connector_line)
+								exit();
+
+						elif len(parsed_connector_line) <= 4:
+							print("WARNING: Short connector line:")
+							print(parsed_connector_line)
+		
+
+		except EnvironmentError:
+			print('Input file ' + inputfile + ' does not exist')
+			exit();
+
 
 	datarefs_that_appear = {};
 	# Lets loop over and look for 
